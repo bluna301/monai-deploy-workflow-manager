@@ -532,6 +532,93 @@ namespace TaskManager.Podman.Tests
                 It.IsAny<CancellationToken>()), Times.Exactly(3));
         }
 
+        [Fact(DisplayName = "ExecuteTask - when shm_size is specified expect it to be set on container request")]
+        public async Task ExecuteTask_WhenShmSizeIsSpecified_ExpectItToBeSetOnContainerRequest()
+        {
+            var payloadFiles = new List<VirtualFileInfo>()
+            {
+                new VirtualFileInfo( "file.dcm",  "path/to/file.dcm", "etag", 1000)
+            };
+            var contianerId = Guid.NewGuid().ToString();
+
+            _podmanClient.Setup(p => p.Images.CreateImageAsync(
+                It.IsAny<ImagesCreateParameters>(),
+                It.IsAny<AuthConfig>(),
+                It.IsAny<IProgress<JSONMessage>>(),
+                It.IsAny<CancellationToken>()));
+            _containerCreator.Setup(p => p.CreateContainerAsync(
+                It.IsAny<Uri>(),
+                It.IsAny<PodmanCreateContainerRequest>(),
+                It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new PodmanCreateContainerResponse { Id = contianerId, Warnings = new List<string>() });
+            _podmanClient.Setup(p => p.Containers.StartContainerAsync(
+                It.IsAny<string>(),
+                It.IsAny<ContainerStartParameters>(),
+                It.IsAny<CancellationToken>()))
+                .ReturnsAsync(true);
+
+            _storageService.Setup(p => p.ListObjectsAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(payloadFiles);
+            _storageService.Setup(p => p.GetObjectAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new MemoryStream(Encoding.UTF8.GetBytes("hello")));
+
+            var message = GenerateTaskDispatchEventWithValidArguments();
+            message.TaskPluginArguments[Keys.ShmSize] = "2147483648";
+
+            var runner = new PodmanPlugin(_serviceScopeFactory.Object, _logger.Object, message);
+            var result = await runner.ExecuteTask(CancellationToken.None).ConfigureAwait(ConfigureAwaitOptions.ContinueOnCapturedContext);
+
+            Assert.Equal(TaskExecutionStatus.Accepted, result.Status);
+            _containerCreator.Verify(p => p.CreateContainerAsync(
+                It.IsAny<Uri>(),
+                It.Is<PodmanCreateContainerRequest>(r => r.ShmSize == 2147483648),
+                It.IsAny<CancellationToken>()), Times.Once());
+
+            runner.Dispose();
+        }
+
+        [Fact(DisplayName = "ExecuteTask - when shm_size is invalid expect log warning and no exception")]
+        public async Task ExecuteTask_WhenShmSizeIsInvalid_ExpectLogWarningAndNoException()
+        {
+            var payloadFiles = new List<VirtualFileInfo>()
+            {
+                new VirtualFileInfo( "file.dcm",  "path/to/file.dcm", "etag", 1000)
+            };
+            var contianerId = Guid.NewGuid().ToString();
+
+            _podmanClient.Setup(p => p.Images.CreateImageAsync(
+                It.IsAny<ImagesCreateParameters>(),
+                It.IsAny<AuthConfig>(),
+                It.IsAny<IProgress<JSONMessage>>(),
+                It.IsAny<CancellationToken>()));
+            _containerCreator.Setup(p => p.CreateContainerAsync(
+                It.IsAny<Uri>(),
+                It.IsAny<PodmanCreateContainerRequest>(),
+                It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new PodmanCreateContainerResponse { Id = contianerId, Warnings = new List<string>() });
+            _podmanClient.Setup(p => p.Containers.StartContainerAsync(
+                It.IsAny<string>(),
+                It.IsAny<ContainerStartParameters>(),
+                It.IsAny<CancellationToken>()))
+                .ReturnsAsync(true);
+
+            _storageService.Setup(p => p.ListObjectsAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(payloadFiles);
+            _storageService.Setup(p => p.GetObjectAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new MemoryStream(Encoding.UTF8.GetBytes("hello")));
+
+            var message = GenerateTaskDispatchEventWithValidArguments();
+            message.TaskPluginArguments[Keys.ShmSize] = "not-a-number";
+
+            var runner = new PodmanPlugin(_serviceScopeFactory.Object, _logger.Object, message);
+            var result = await runner.ExecuteTask(CancellationToken.None).ConfigureAwait(ConfigureAwaitOptions.ContinueOnCapturedContext);
+
+            Assert.Equal(TaskExecutionStatus.Accepted, result.Status);
+            _logger.VerifyLogging("Invalid size specified for /dev/shm: not-a-number. Please use value between 1 and 9223372036854775807.", LogLevel.Error, Times.Once());
+
+            runner.Dispose();
+        }
+
         [Fact(DisplayName = "HandleTimeout - when called expecte to terminate container")]
         public async Task HandleTimeout_WhenCalled_ExpectToTerminateContainer()
         {

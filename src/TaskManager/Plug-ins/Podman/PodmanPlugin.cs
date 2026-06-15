@@ -422,6 +422,18 @@ namespace Monai.Deploy.WorkflowManager.TaskManager.Podman
                 request.User = Event.TaskPluginArguments[Keys.User];
             }
 
+            if (Event.TaskPluginArguments.ContainsKey(Keys.ShmSize))
+            {
+                if (long.TryParse(Event.TaskPluginArguments[Keys.ShmSize], out var shmsize))
+                {
+                    request.ShmSize = shmsize;
+                }
+                else
+                {
+                    _logger.InvalidShmSize(Event.TaskPluginArguments[Keys.ShmSize]);
+                }
+            }
+
             return request;
         }
 

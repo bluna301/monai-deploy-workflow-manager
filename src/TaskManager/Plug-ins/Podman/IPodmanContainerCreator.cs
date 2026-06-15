@@ -107,6 +107,9 @@ namespace Monai.Deploy.WorkflowManager.TaskManager.Podman
 
         [JsonPropertyName("user")]
         public string? User { get; set; }
+
+        [JsonPropertyName("shm_size")]
+        public long? ShmSize { get; set; }
     }
 
     public class PodmanDevice

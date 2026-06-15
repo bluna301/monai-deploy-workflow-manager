@@ -59,6 +59,11 @@ namespace Monai.Deploy.WorkflowManager.TaskManager.Podman
         public static readonly string TemporaryStorageContainerPath = "temp_storage_container_path";
 
         /// <summary>
+        /// Key for setting the shm size.
+        /// </summary>
+        public static readonly string ShmSize = "shm_size";
+
+        /// <summary>
         /// Prefix for environment variables.
         /// </summary>
         public static readonly string EnvironmentVariableKeyPrefix = "env_";
